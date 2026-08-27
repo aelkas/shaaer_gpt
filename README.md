@@ -18,8 +18,8 @@ experiments and their results. Section 9 places the whole thing inside the
 scaling literature. Section 10 is an honest account of what these results do
 *not* establish, which for a study of this size is the most important section.
 
-The code lives in `arabic_gpt_study.ipynb`. Every number quoted here was
-produced by a cell in that notebook and is reproducible from it.
+The code lives in `arabic_gpt.ipynb`. Every number quoted here was produced by
+a cell in that notebook and is reproducible from it.
 
 **Three results in one paragraph.** (i) On a 2.65M-character corpus, the choice
 of tokeniser — character-level versus BPE at five vocabulary sizes — moved
@@ -87,7 +87,7 @@ syntactic, and it spans the entire document.
 
 **It has a rigid two-part line.** Each line (بيت, *bait*) splits into two
 hemistichs (شطر) of equal metrical weight. In the corpus this boundary is
-encoded as ` # `.
+encoded as `" # "`.
 
 So the corpus hands us three separable, mechanically verifiable structures at
 three different length scales: syllable-level (metre), line-level (hemistich
@@ -232,7 +232,7 @@ single dot.
 Now suppose you don't know $P$ and use your model $Q$ instead. Your average code
 length becomes the **cross-entropy**
 
-$$H(P, Q) = -\sum_x P(x) \log_2 Q(x) \;\ge\; H(P),$$
+$$H(P, Q) = -\sum_x P(x) \log_2 Q(x) \ \ge\ H(P),$$
 
 with equality only when $Q = P$. The gap is the KL divergence — the number of
 bits per symbol you waste by having the wrong model.
@@ -584,7 +584,7 @@ product means alignment — this key matches what I want. Softmax over those
 scores turns them into weights summing to one, and the output is the
 corresponding weighted average of values:
 
-$$\text{out}_t = \sum_{s \le t} \underbrace{\frac{\exp(q_t\!\cdot\!k_s/\sqrt{d})}{\sum_{s' \le t}\exp(q_t\!\cdot\!k_{s'}/\sqrt{d})}}_{a_{ts}} \; v_s$$
+$$\text{out}_t = \sum_{s \le t} a_{ts} \, v_s, \qquad a_{ts} = \frac{\exp(q_t \cdot k_s/\sqrt{d})}{\sum_{s' \le t}\exp(q_t \cdot k_{s'}/\sqrt{d})}$$
 
 In code, for the whole sequence at once:
 
@@ -911,7 +911,8 @@ gradient, where Adam's normalisation would otherwise scale it inconsistently.
 network not to depend on any single unit. Note that it is a regulariser against
 *overfitting*, so the right value depends on how many times the data is repeated
 — at 200 epochs it is essential, at 1 epoch it costs capacity for no benefit.
-Section 9 shows this study spans both regimes, at a fixed 0.1.
+Every run here sat between 1.4 and 7 epochs (§5.2.1) at a fixed 0.1, which is
+plausibly more regularisation than that regime needs.
 
 **Evaluation** averages loss over 25 random batches from each split. This is an
 *estimate*, not the exact validation loss, and its noise is one contributor to
@@ -976,7 +977,7 @@ but it means they are not comparable to a randomly-split baseline.
 An **iteration** is one gradient step on one batch. One batch contains `batch`
 sequences of `block_size` tokens, so:
 
-$$\text{tokens processed} = \text{iters} \times \text{batch} \times \text{block\_size}$$
+$$\text{tokens processed} = \text{iters} \times \text{batch} \times \text{block size}$$
 
 $$\text{epochs} = \frac{\text{tokens processed}}{0.9 \times N_{\text{tokens}}}$$
 
@@ -989,7 +990,7 @@ denominator is the training tokens, not the whole corpus.
 > from a different cell. It printed 1.73; the true figure for that run is about
 > **7**. The corrected line is `iters*batch*block/(0.9*len(ids))`.
 
-### 5.2.1 Reconstructing the iteration counts
+#### 5.2.1 Reconstructing the iteration counts
 
 The notebook was executed across several sessions and `ITERS` was edited between
 them, so the cell that *defines* `ITERS` does not tell you what any given result
@@ -1050,7 +1051,7 @@ increase — the flattening being the point where extra vocabulary stops buying
 sequence compression and starts costing embedding parameters and undertrained
 rare tokens.
 
-### Results
+### 6.1 Results
 
 ![Study 1 — quality vs merges, sequence compression, and training curves](figs/fig1_merges.png)
 
@@ -1067,7 +1068,7 @@ Sequence compression behaves exactly as theory says: chars per token rises
 monotonically and with diminishing returns, 1.00 → 1.46 → 1.57 → 1.68 → 1.79 →
 1.89. Doubling the vocabulary buys steadily less.
 
-### What this actually shows
+### 6.2 What this actually shows
 
 **Character-level is genuinely worst.** The gap from char (3.2008) to the best
 BPE setting (3.1092) is 0.0916 bpc, about 8 standard deviations of the pooled
@@ -1127,7 +1128,7 @@ much of the spread being measured.
 
 ### 6.4 Consequence for the rest of the study
 
-**Consequence for the rest of the study.** `BEST_VOCAB = 512` was carried into
+`BEST_VOCAB = 512` was carried into
 Study 3, but 512 ranks *third of six* in this sweep, and fifth of six among the
 BPE settings. The choice actually came from Study 2's widest column (§7), where
 512 does win — but the two studies rank vocabularies differently, which is itself
@@ -1352,7 +1353,7 @@ The one unambiguous number in this study:
 
 | corpus | chars | epochs | val BPC | bits/verse |
 |---|---:|---:|---:|---:|
-| MetRec, cell B | 2,653,532 | ~215 | 2.6785 | — |
+| MetRec, cell B | 2,653,532 | *unrecorded* (§5.2.1) | 2.6785 | — |
 | Ashaar, cell B | 161,956,130 | ~7 | **2.2502** | 114.4 |
 
 **A 0.43 bpc improvement — roughly six times the entire spread of Study 1's
@@ -1392,7 +1393,7 @@ at temperature 1.0, top-$k$ 20, from the Ashaar cell B model:
 
 **What works.**
 
-*Line structure is perfect.* All nine lines carry exactly one ` # ` with spaces
+*Line structure is perfect.* All nine lines carry exactly one `" # "` with spaces
 intact; the automated check `sum(1 for l in txt.split("\n") if "#" in l and not
 (" # " in l))` returns **0**.
 
@@ -1434,7 +1435,7 @@ cannot be quantified, which is precisely why §11 asks for one.
 across the hemistich boundary — بالار # د, وال # قلب, ان # ن. This is not a model
 error: **the training data does it too.** The first poem printed from the corpus
 build reads `اصبح الملك للذي فطر الخل # ق بتقدير للعزيز العليم`, splitting الخلق
-across the ` # `. The model is faithfully reproducing a property of its input.
+across the `" # "`. The model is faithfully reproducing a property of its input.
 
 That makes it a **data pipeline issue rather than a modelling one**, and a
 potentially serious one: classical baits do not split words across the شطر, so
@@ -1686,7 +1687,7 @@ is what would let a poem run past 512 tokens without losing the header.
 §8.4.
 
 **12. Measure the word-splitting rate in the corpus.** Count baits where the
-character before or after ` # ` continues a word, and if it is common, fix
+character before or after `" # "` continues a word, and if it is common, fix
 `build_corpus` to segment at word boundaries.
 
 ---
@@ -1696,7 +1697,7 @@ character before or after ` # ` continues a word, and if it is common, fix
 ```
 Environment:  Google Colab Pro, NVIDIA L4 (24GB), PyTorch 2.11.0+cu128
 Datasets:     ARBML/MetRec (MIT), arbml/ashaar (HuggingFace)
-Extra file:   prepare_ashaar.py  (must be uploaded to the Colab session)
+Corpus build: prepare_ashaar.py  (upload to the Colab session before running)
 ```
 
 Run the notebook top to bottom. `QUICK = True` reduces the grids for a ~10-minute

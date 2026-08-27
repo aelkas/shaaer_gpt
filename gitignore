@@ -1,0 +1,23 @@
+# Corpora — rebuilt by the notebook, never committed (poems_plain.txt is ~162MB)
+_train.txt
+_test.txt
+arabic_poems*.txt
+arabic_poems_structured.txt
+poems_plain.txt
+poems_tash.txt
+
+# Checkpoints — published via Hugging Face / GitHub Releases, not git
+*.pt
+*.safetensors
+
+# Generated at runtime
+poem.txt
+study*.json
+fig*.png
+!figs/*.png
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
