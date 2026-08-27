@@ -199,7 +199,7 @@ The standard choice is **negative log-likelihood**. If the true next symbol is
 $x_t$ and the model assigned it probability $p_t$, the loss at that position is
 $-\log p_t$. Over a sequence:
 
-$$\mathcal{L} = -\frac{1}{T}\sum_{t=1}^{T} \log P(x_t \mid x_{<t}).$$
+$$\mathcal{L} = -\frac{1}{T}\sum_{t=1}^{T} \log P(x_t \mid x_{\lt t}).$$
 
 Three reasons this is the right function and not an arbitrary one:
 
@@ -279,7 +279,7 @@ $$\mathrm{BPC} = \mathcal{L}_{\text{nats/token}} \times \frac{N_{\text{tokens}}}
 **Why this is exact and not an approximation.** By the chain rule, the total
 negative log-probability the model assigns to the whole corpus is
 
-$$-\log P(\text{corpus}) = \sum_{i} -\log P(t_i \mid t_{<i}) = \mathcal{L} \times N_{\text{tokens}}.$$
+$$-\log P(\text{corpus}) = \sum_{i} -\log P(t_i \mid t_{\lt i}) = \mathcal{L} \times N_{\text{tokens}}.$$
 
 The left-hand side is a property of the *text and the model*, not of how the text
 was chopped up — provided the tokenisation is **lossless and deterministic**,
