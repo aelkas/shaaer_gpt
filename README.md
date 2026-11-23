@@ -1,80 +1,81 @@
 # Shaaer: a small GPT for classical Arabic poetry
 
-A decoder-only transformer and a BPE tokeniser, both written from scratch and trained on classical Arabic poetry, plus a few controlled experiments on tokenisation, model width and corpus size.
+Decoder-only transformers and a BPE tokeniser, written and trained from scratch on 152M characters of classical Arabic poetry, with controlled experiments on the training recipe, attention, model shape and scale.
 
-The project started from Andrej Karpathy's video [*Let's build GPT: from scratch, in code, spelled out*](https://www.youtube.com/watch?v=kCc8FmEb1nY), where he builds a character-level GPT on Shakespeare. Shaaer applies the same idea to Arabic poetry, then adds its own BPE tokeniser, metre/theme prompting and experiments. The architecture follows his [nanoGPT](https://github.com/karpathy/nanoGPT).
+The project started from Andrej Karpathy's video [*Let's build GPT: from scratch, in code, spelled out*](https://www.youtube.com/watch?v=kCc8FmEb1nY), where he builds a character-level GPT on Shakespeare. Shaaer applies the same idea to Arabic poetry and then goes further: its own tokeniser, metre/theme prompting, and about 90 training runs to see what actually matters. The base architecture follows his [nanoGPT](https://github.com/karpathy/nanoGPT).
+
+All numbers come from `results/` and were produced in one overnight run on a single A100.
 
 ## Results in short
 
-- **More data was the only large effect.** Going from 2.65M to 162M characters lowered validation loss from **2.68 to 2.25 bits per character** (bzip2: 3.44 on the small corpus). Tokeniser and width changes moved it by much less.
-- **The model keeps the rhyme.** Prompted with a metre and a theme, the 7.5M-parameter model ends all 9 lines of a poem on the same letter (qāf), stays in the theme's vocabulary, and copies no line from the corpus. Nothing in the architecture enforces rhyme.
-- **The tokeniser and width experiments were inconclusive.** They stopped before convergence and gave coarser tokenisers more text per step, so they don't settle their questions.
+- **The original setup was losing 0.38 bits per character.** Same 7.3M-parameter model, same 300M tokens: **2.417 → 2.035**. Most of the gain is the learning rate and schedule (−0.32) and rotary positions (−0.06).
+- **Multi-head attention helps up to about 6 heads.** At fixed width and parameter count, 1 → 6 heads lowers the loss by 0.085; 6 → 24 changes almost nothing.
+- **Replacing Q·Kᵀ by one learned full matrix per head does not help.** It is worse or on par, and 2.8× slower with 6 heads.
+- **The model has rhyme heads.** In the 6-head model, one head in layer 2 puts 32× its uniform share of attention on the previous lines' endings. Switching it off raises the loss on line-final tokens by 1.14 nats.
+- **Best model: 1.832 bits/char** (85M parameters). bzip2 gets 3.396 on the same text.
+- **This corpus is data-limited.** The compute-optimal model size grows as C^0.80 and its token budget only as C^0.20, against about 0.5 / 0.5 in Chinchilla.
+- **Generated poems get closer to real ones as models grow.** Lines that share the poem's rhyme letter: 83% for the 85M model, 87% for real poems. Invented rhyme words fall from 19% to 6% (real poems: 4%).
 
-## Data and model
+## Data
 
-| corpus | content | characters |
-|---|---|---:|
-| [MetRec](https://github.com/ARBML/MetRec) | 55,075 single verses | 2.65M |
-| [Ashaar](https://huggingface.co/datasets/arbml/ashaar) | 199,770 full poems | 162M |
+[Ashaar](https://huggingface.co/datasets/arbml/ashaar), 199,770 poems with 3 to 60 lines. Exact duplicates are removed and the train/validation split is done by poem; validation poems sharing any line with training are moved to training, so **0% of validation lines appear in training**. In the first version of this project, 15.8% did, so its numbers are not comparable with these.
 
-Each Ashaar poem starts with a header `[metre|theme]`, e.g. `[الكامل|غزل]`, so prompting with a header asks for that metre and theme. The two halves of a line are separated by ` # `. Text is normalised (tashkeel and tatweel removed, letter variants unified); prompts go through the same normalisation.
-
-Tokeniser: character level or BPE, written from scratch and fitted on the training split only. Each letter is kept together with its diacritics before BPE; this has no effect on the results below, which all use text without tashkeel.
-
-Model: nanoGPT-style, 4 layers, width 384, 6 heads, context 512, **7.49M parameters**. AdamW, lr 3e-4, one NVIDIA L4 on Colab.
-
-Everything is reported in **bits per character**, so models with different tokenisers can be compared.
+Each poem starts with a header `[metre|theme]`, e.g. `[الطويل|عامه]`, so prompting with a header asks for that metre and theme. The two halves of a line are separated by ` # `. Tashkeel is removed and letter variants are unified. BPE with 512 tokens, fitted on the training split.
 
 ## Experiments
 
 | experiment | question | answer |
 |---|---|---|
-| Number of BPE merges (MetRec, 1.9M params, 3 seeds) | Does tokeniser granularity matter? | Not settled: runs stopped at 800 iterations and coarser tokenisers saw up to 89% more text. |
-| Vocabulary × width grid (150 runs) | Does the best width grow with vocabulary size? | Not settled: the best width was always the largest one tried. Side result: at 3M parameters, 2 wide layers beat 10 narrow ones by 0.32 bits/char. |
-| BPE vs characters, same settings | Does BPE help? | No difference (2.682 vs 2.679, one seed). |
-| MetRec → Ashaar | Does more data help? | Yes: 2.68 → 2.25. |
+| learning rate vs width | How should the learning rate shrink with width? | lr ∝ width^−0.73 |
+| recipe ladder | Was the original recipe holding the model back? | Yes, by 0.38 bits/char |
+| number of heads (1 to 24) | Does splitting the width into heads help? | Yes up to ~6, flat after |
+| full Q·Kᵀ matrix per head | Is the low rank of standard heads a bottleneck? | No |
+| head analysis | What do the heads do? | Some heads track the rhyme |
+| depth vs width | Deep-narrow or shallow-wide at 7M parameters? | Deeper wins: 16 × 192 scores 2.014, 4 × 384 scores 2.035 |
+| scaling (23 runs, 5 budgets) | Best model size for each compute budget? | N* ∝ C^0.80, D* ∝ C^0.20 |
+| distillation | Does training on a bigger model's predictions help? | Yes: −0.042 at equal tokens |
+| distribution checks | Where does the model match the real text? | Short range: within sampling noise. The gaps are long-range |
+| generation | Rhyme, invented words, copying vs real poems | Improves with scale, no copied lines |
 
-![Merge sweep](figs/fig1_merges.png)
-![Vocabulary × width](figs/fig2_grid.png)
+Most runs train on 300M tokens (3.1 epochs) with one seed. Where two seeds exist they differ by up to 0.014 bits/char, so smaller gaps are noise.
 
-**Caveats.** The 2.68 and 2.25 come from different validation sets. Some Ashaar validation lines also appear in training, so 2.25 is somewhat optimistic; results on a de-duplicated split will be added here.
+**Recipe ladder: one change at a time**
 
-## Sample
+![Recipe ladder](figs/v2_ladder.png)
 
-Prompt `[الكامل|غزل]` + `وردة`, temperature 1.0, top-k 20:
+**Number of heads**
 
-```
-ورده غناء # وازدح بالاطارق
-وملاح طرفي بالار # د تواترها بالطارق
-ووجنتي الاكوان # حكمتهم والنازق
-ما شك الا عله # ما شبه الا بالحانق
-فاهتزن الاصفر # بخده والخمر عاشق
-من بعدكم بالله يا # له مؤذن بالشقاق
-وسمعت بالخمس وال # قلب الرضا بالشقاق
-وذكركم بالله ان # ن مجمع الكفارق
-ان كان قد صان في # دل لي علي المغوارق
-```
+![Heads](figs/v2_heads.png)
 
-- **Gets right:** one rhyme letter throughout, one ` # ` per line, ghazal vocabulary (خمر, خده, طرفي), no copied lines.
-- **Gets wrong:** some rhyme words are invented (الكفارق, المغوارق), and بالشقاق is repeated on consecutive lines.
-- **Metre is not measured yet.** Some halves scan as the two-foot form of al-kāmil, others are too short.
-- Words split across the two halves (بالار # د) also occur in the training data. In classical prosody this is *tadwīr*, not an error.
+**Scaling**
 
-## Run it
+![Scaling](figs/v2_scaling.png)
 
-Colab with a GPU: upload `prepare_ashaar.py`, run `arabic_gpt.ipynb` top to bottom (`QUICK = True` for a 10-minute test).
+The largest budget's optimum sits on the edge of the grid, so the last point of the fit is a lower bound.
 
-```python
-m, tok, ck = load_gpt("gpt_B_plain_bpe_ashaar.pt")
-txt = write_poem((m, tok, ck), prompt_raw="[الكامل|غزل]\nوردة", n=200, temperature=1.0, top_k=20)
-```
+**Model vs real text: short-range statistics, use of context, calibration**
 
-Read samples from the saved file rather than the notebook output, which can reorder right-to-left text.
+![Distributions](figs/v2_distributions.png)
+
+The per-head analysis for every attention variant is in [`figs/v2_head_analysis.png`](figs/v2_head_analysis.png), and every run is listed in [`results/summary.md`](results/summary.md).
+
+## Limitations
+
+- One seed for most runs. For 8 of the 9 attention variants, the best learning rate tried was the largest (2×), so some may do slightly better.
+- Metre is not measured automatically yet; rhyme, invented words and copying are.
+- The 85M model is slightly overconfident (calibration error 0.037 against 0.002 for the small models).
+
+## Code
+
+- `shaaer/`: tokeniser (`tok.py`), data pipeline (`data.py`), model with all attention variants (`model.py`), training (`train.py`), head and generation analysis (`analysis.py`), experiment suite (`suite.py`), follow-up analyses (`extras.py`), figures (`plots.py`).
+- `shaaer_v2_experiments.ipynb`: the Colab notebook that ran everything (about 9.5 h for the suite and 1.5 h for the follow-ups on an A100). It is resumable: finished runs are skipped.
+- `arabic_gpt.ipynb`, `prepare_ashaar.py`: the first version, a smaller study on an L4.
 
 ## References
 
 - Karpathy, A. *Let's build GPT: from scratch, in code, spelled out* (video) and *nanoGPT*.
 - Sennrich, Haddow & Birch (2016). *Neural Machine Translation of Rare Words with Subword Units.*
-- Yang et al. (2018). *Breaking the Softmax Bottleneck.*
+- Su et al. (2021). *RoFormer: Enhanced Transformer with Rotary Position Embedding.*
 - Hoffmann et al. (2022). *Training Compute-Optimal Large Language Models.*
-- ARBML. *MetRec* and *Ashaar* datasets.
+- Muennighoff et al. (2023). *Scaling Data-Constrained Language Models.*
+- ARBML. *Ashaar* dataset.
